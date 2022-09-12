@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e
+
+people=$@
+
+queries=""
+
+for person in $people; do
+    sanitizedName=$(echo "$person" | sed -r 's/[^a-z]+//g')
+    queries+="$sanitizedName: user(login: \"$person\") { ...PR } "
+done
+
+query="fragment PR on User {
+    login
+    name
+    pullRequests(first: 100, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
+        nodes {
+            createdAt
+            number
+            title
+            reviewDecision
+            url
+        }
+    }
+}
+
+query {
+  $queries
+}"
+
+template='{{range .data -}}
+{{$name := .login}}
+{{- tablerow "" "" "" "" "" -}}
+{{- tablerow ($name | autocolor "blue") "" "" "" "" -}}
+{{- range .pullRequests.nodes -}}
+{{- tablerow (.createdAt | timeago | autocolor "gray") (printf "#%v" .number | autocolor "green") .title (.reviewDecision | autocolor "yellow") (.url | autocolor "cyan") -}}
+{{- end -}}
+{{- end -}}
+{{tablerender}}'
+
+exec gh api graphql --paginate -f query="$query" -t "$template"
