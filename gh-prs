@@ -39,4 +39,6 @@ template='{{range .data -}}
 {{- end -}}
 {{tablerender}}'
 
+export GH_FORCE_TTY=10000
+
 exec gh api graphql --paginate -f query="$query" -t "$template"
