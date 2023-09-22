@@ -98,7 +98,7 @@ forMe () {
         DONE: search(query: \"is:pr is:open reviewed-by:@me created:>=$last_week\", type: ISSUE, first: 100) {
             ...PRS
         }
-        REQUESTED: search(query: \"is:pr is:open review-requested:@me created:>=$last_week\", type: ISSUE, first: 100) {
+        TEAM_REQUESTED: search(query: \"is:pr is:open review-requested:@me -user-review-requested:@me created:>=$last_week\", type: ISSUE, first: 100) {
             ...PRS
         }
         USER_REQUESTED: search(query: \"is:pr is:open user-review-requested:@me created:>=$last_week\", type: ISSUE, first: 100) {
