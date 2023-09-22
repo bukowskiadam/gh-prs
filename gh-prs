@@ -108,12 +108,12 @@ forMe () {
 
     template='{{range $header, $prs := .data -}}
     {{- tablerow "" "" "" "" "" "" -}}
-    {{- tablerow ($header | autocolor "white+bh") "" "" "" "" "" -}}
+    {{- tablerow ($header | autocolor "blue+bh") "" "" "" "" "" -}}
     {{range .edges -}}
     {{with .node}}
     {{- tablerow
         (.createdAt | timeago | autocolor "magenta")
-        (.repository.nameWithOwner | autocolor "gray")
+        (.repository.nameWithOwner | autocolor "black+h")
         (printf "#%v" .number | autocolor "green")
         (truncate 50 .title)
         (.reviewDecision | autocolor "yellow")
