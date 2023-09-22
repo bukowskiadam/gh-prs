@@ -42,7 +42,7 @@ gh prs -r|--review [date param]
 Examples:
 ```bash
 # Default -7 days
-gh prs
+gh prs -r
 
 # Linux specific
 gh prs -r "-30 days"
