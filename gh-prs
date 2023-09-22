@@ -1,44 +1,134 @@
 #!/bin/bash
 
 set -e
-
-people=$@
-
-queries=""
-
-for person in $people; do
-    sanitizedName=$(echo "$person" | sed -r 's/[^a-z]+//g')
-    queries+="$sanitizedName: user(login: \"$person\") { ...PR } "
-done
-
-query="fragment PR on User {
-    login
-    name
-    pullRequests(first: 100, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
-        nodes {
-            createdAt
-            number
-            title
-            reviewDecision
-            url
-        }
-    }
-}
-
-query {
-  $queries
-}"
-
-template='{{range .data -}}
-{{$name := .login}}
-{{- tablerow "" "" "" "" "" -}}
-{{- tablerow ($name | autocolor "white+bh") "" "" "" "" -}}
-{{- range .pullRequests.nodes -}}
-{{- tablerow (.createdAt | timeago | autocolor "magenta") (printf "#%v" .number | autocolor "green") .title (.reviewDecision | autocolor "yellow") (.url | hyperlink .url | autocolor "cyan") -}}
-{{- end -}}
-{{- end -}}
-{{tablerender}}'
-
 export GH_FORCE_TTY=10000
 
-exec gh api graphql --paginate -f query="$query" -t "$template"
+fromPeople () {
+    people=$@
+    
+    if [ -z "$people" ]; then
+        echo "Please provide a list of users: $0 user-1 user-2";
+        exit 1;
+    fi
+
+    queries=""
+
+    for person in $people; do
+        sanitizedName=$(echo "$person" | sed -r 's/[^a-z]+//g')
+        queries+="$sanitizedName: user(login: \"$person\") { ...PR } "
+    done
+
+    query="fragment PR on User {
+        login
+        name
+        pullRequests(first: 100, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
+            nodes {
+                createdAt
+                number
+                title
+                reviewDecision
+                url
+            }
+        }
+    }
+
+    query {
+    $queries
+    }"
+
+    template='{{range .data -}}
+    {{$name := .login}}
+    {{- tablerow "" "" "" "" "" -}}
+    {{- tablerow ($name | autocolor "white+bh") "" "" "" "" -}}
+    {{- range .pullRequests.nodes -}}
+    {{- tablerow (.createdAt | timeago | autocolor "magenta") (printf "#%v" .number | autocolor "green") .title (.reviewDecision | autocolor "yellow") (.url | hyperlink .url | autocolor "cyan") -}}
+    {{- end -}}
+    {{- end -}}
+    {{tablerender}}'
+
+    exec gh api graphql --paginate -f query="$query" -t "$template"
+}
+
+forMe () {
+    relative_date=$1
+    last_week=""
+
+    unameOut="$(uname -s)"
+    case "${unameOut}" in
+        Linux*)     last_week=`date -d "${relative_date:-"-7 days"}" "+%Y-%m-%d"`;;
+        Darwin*)    last_week=`date -v ${relative_date:-"-7d"} "+%Y-%m-%d"`;;
+        *)          echo "Unrecognized operating system \`$unameOut\`. I don't know how to get a relative date"; exit 1;;
+    esac
+
+    query="fragment PRS on SearchResultItemConnection {
+        edges {
+            node {
+                ... on PullRequest {
+                    createdAt
+                    number
+                    title
+                    reviewDecision
+                    url
+                    author {
+                        login
+                    }
+                    repository {
+                        nameWithOwner
+                    }
+                    reviewRequests(first: 10) {
+                        edges {
+                            node {
+                                requestedReviewer {
+                                    ... on User {
+                                        login
+                                    }
+                                    ... on Team {
+                                        name
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    query {
+        DONE: search(query: \"is:pr is:open reviewed-by:@me created:>=$last_week\", type: ISSUE, first: 100) {
+            ...PRS
+        }
+        REQUESTED: search(query: \"is:pr is:open review-requested:@me created:>=$last_week\", type: ISSUE, first: 100) {
+            ...PRS
+        }
+        USER_REQUESTED: search(query: \"is:pr is:open user-review-requested:@me created:>=$last_week\", type: ISSUE, first: 100) {
+            ...PRS
+        }
+    }"
+
+    template='{{range $header, $prs := .data -}}
+    {{- tablerow "" "" "" "" "" "" -}}
+    {{- tablerow ($header | autocolor "white+bh") "" "" "" "" "" -}}
+    {{range .edges -}}
+    {{with .node}}
+    {{- tablerow
+        (.createdAt | timeago | autocolor "magenta")
+        (.repository.nameWithOwner | autocolor "gray")
+        (printf "#%v" .number | autocolor "green")
+        (truncate 50 .title)
+        (.reviewDecision | autocolor "yellow")
+        (.url | hyperlink .url | autocolor "cyan")
+    -}}
+    {{- end -}}
+    {{- end -}}
+    {{- end -}}
+    {{tablerender}}'
+
+    exec gh api graphql --paginate -f query="$query" -t "$template"
+}
+
+if [ "$1" = "-r" -o "$1" = "--review" ]; then
+    forMe $2
+else
+    fromPeople $@
+fi
